@@ -1,0 +1,20 @@
+[package]
+name = "tracing-otlp"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tracing = "0.1"
+tracing-distributed  = { path = "../tracing-distributed" }
+prost = "0.12"
+ureq = "2.10"
+url = "2.5"
+uuid = { version = "1.10", features = ["v4"] }
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
+
+[build-dependencies]
+prost-build = "0.13"

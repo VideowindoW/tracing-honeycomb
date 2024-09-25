@@ -3,4 +3,5 @@ resolver = "2"
 members = [
     "tracing-distributed",
     "tracing-honeycomb",
+    "tracing-otlp"
 ]
