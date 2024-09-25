@@ -45,17 +45,20 @@ impl<R: Reporter> Telemetry for HoneycombTelemetry<R> {
         Default::default()
     }
 
-    fn report_span(&self, span: Span<Self::Visitor, Self::SpanId, Self::TraceId>) {
+    fn report_span(
+        &self,
+        span: Span<Self::Visitor, Self::SpanId, Self::TraceId>,
+        events: Vec<Event<Self::Visitor, Self::SpanId, Self::TraceId>>,
+    ) {
         if self.should_report(&span.trace_id) {
+            for event in events {
+                let (data, timestamp) = event_to_values(event);
+                self.report_data(data, timestamp);
+            }
             let (data, timestamp) = span_to_values(span);
             self.report_data(data, timestamp);
         }
     }
 
-    fn report_event(&self, event: Event<Self::Visitor, Self::SpanId, Self::TraceId>) {
-        if self.should_report(&event.trace_id) {
-            let (data, timestamp) = event_to_values(event);
-            self.report_data(data, timestamp);
-        }
-    }
+    fn report_event(&self, _event: Event<Self::Visitor, Self::SpanId, Self::TraceId>) {}
 }

@@ -187,6 +187,7 @@ where
         let mut visitor: V = self.telemetry.mk_visitor();
         attrs.record(&mut visitor);
         extensions_mut.insert::<V>(visitor);
+        extensions_mut.insert::<Vec<trace::Event<V, SpanId, TraceId>>>(Default::default());
     }
 
     fn on_record(&self, id: &Id, values: &Record, ctx: Context<S>) {
@@ -210,15 +211,28 @@ where
             ctx.current_span().id().cloned()
         };
 
+        let initialized_at = SystemTime::now();
+
+        let mut visitor = self.telemetry.mk_visitor();
+        event.record(&mut visitor);
+
         match parent_id {
-            None => {} // not part of a trace, don't bother recording via honeycomb
+            None => {
+                let event = trace::Event {
+                    trace_id: None,
+                    parent_id: None,
+                    initialized_at,
+                    meta: event.metadata(),
+                    service_name: self.service_name,
+                    values: visitor,
+                };
+
+                self.telemetry.report_event(event);
+            }
             Some(parent_id) => {
-                let initialized_at = SystemTime::now();
-
-                let mut visitor = self.telemetry.mk_visitor();
-                event.record(&mut visitor);
-
                 // TODO: dedup
+                // Create iterator traversing the span's parents starting with this
+                // event's parent span
                 let iter = itertools::unfold(Some(parent_id.clone()), |st| match st {
                     Some(target_id) => {
                         let res = ctx
@@ -232,16 +246,22 @@ where
 
                 // only report event if it's part of a trace
                 if let Some(parent_trace_ctx) = self.trace_ctx_registry.eval_ctx(iter) {
+                    let span = ctx
+                        .span(&parent_id)
+                        .expect("Parent span id should be in the context");
                     let event = trace::Event {
-                        trace_id: parent_trace_ctx.trace_id,
+                        trace_id: Some(parent_trace_ctx.trace_id),
                         parent_id: Some(self.trace_ctx_registry.promote_span_id(parent_id)),
                         initialized_at,
                         meta: event.metadata(),
                         service_name: self.service_name,
                         values: visitor,
                     };
-
-                    self.telemetry.report_event(event);
+                    let mut extensions = span.extensions_mut();
+                    extensions
+                        .get_mut::<Vec<trace::Event<V, SpanId, TraceId>>>()
+                        .expect("List of events should have been added to span")
+                        .push(event);
                 }
             }
         }
@@ -272,6 +292,10 @@ where
                 .remove()
                 .expect("should be present on all spans");
 
+            let events = extensions_mut
+                .remove::<Vec<trace::Event<V, SpanId, TraceId>>>()
+                .expect("List of events should have been added to span");
+
             let completed_at = SystemTime::now();
 
             let parent_id = match trace_ctx.parent_span {
@@ -283,6 +307,7 @@ where
 
             let span = trace::Span {
                 id: self.trace_ctx_registry.promote_span_id(id),
+                name: span.name().to_string(),
                 meta: span.metadata(),
                 parent_id,
                 initialized_at,
@@ -292,7 +317,7 @@ where
                 values: visitor,
             };
 
-            self.telemetry.report_span(span);
+            self.telemetry.report_span(span, events);
         };
     }
 
@@ -451,7 +476,7 @@ mod tests {
             assert_eq!(span.parent_id, Some(root_span.id.clone()));
             assert_eq!(event.parent_id, Some(span.id.clone()));
             assert_eq!(span.trace_id, explicit_trace_id());
-            assert_eq!(event.trace_id, explicit_trace_id());
+            assert_eq!(event.trace_id, Some(explicit_trace_id()));
         }
     }
 }

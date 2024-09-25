@@ -13,10 +13,15 @@ pub trait Telemetry {
     /// Initialize a visitor, used to record values from spans and events as they are observed
     fn mk_visitor(&self) -> Self::Visitor;
 
-    /// Report a `Span` to this Telemetry instance's backend.
-    fn report_span(&self, span: Span<Self::Visitor, Self::SpanId, Self::TraceId>);
+    /// Report a `Span` with its corresponding `Event`s to this Telemetry instance's backend.
+    fn report_span(
+        &self,
+        span: Span<Self::Visitor, Self::SpanId, Self::TraceId>,
+        events: Vec<Event<Self::Visitor, Self::SpanId, Self::TraceId>>,
+    );
 
     /// Report an `Event` to this Telemetry instance's backend.
+    /// Only includes `Event`s not part of a `Span`.
     fn report_event(&self, event: Event<Self::Visitor, Self::SpanId, Self::TraceId>);
 }
 
@@ -51,7 +56,12 @@ where
         Default::default()
     }
 
-    fn report_span(&self, _: Span<Self::Visitor, Self::SpanId, Self::TraceId>) {}
+    fn report_span(
+        &self,
+        _: Span<Self::Visitor, Self::SpanId, Self::TraceId>,
+        _: Vec<Event<Self::Visitor, Self::SpanId, Self::TraceId>>,
+    ) {
+    }
 
     fn report_event(&self, _: Event<Self::Visitor, Self::SpanId, Self::TraceId>) {}
 }
@@ -90,7 +100,11 @@ pub(crate) mod test {
             BlackholeVisitor
         }
 
-        fn report_span(&self, span: Span<BlackholeVisitor, SpanId, TraceId>) {
+        fn report_span(
+            &self,
+            span: Span<BlackholeVisitor, SpanId, TraceId>,
+            _: Vec<Event<Self::Visitor, Self::SpanId, Self::TraceId>>,
+        ) {
             // succeed or die. failure is unrecoverable (mutex poisoned)
             let mut spans = self.spans.lock().unwrap();
             spans.push(span);

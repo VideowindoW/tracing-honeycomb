@@ -25,6 +25,8 @@ pub use trace_id::TraceId;
 pub use tracing_distributed::{TelemetryLayer, TraceCtxError};
 pub use visitor::HoneycombVisitor;
 
+pub use libhoney::{client::Options, Config};
+
 pub(crate) mod deterministic_sampler;
 
 #[cfg(feature = "use_parking_lot")]

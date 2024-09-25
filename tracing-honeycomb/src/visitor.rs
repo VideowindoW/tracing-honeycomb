@@ -73,7 +73,10 @@ pub(crate) fn event_to_values(
         // magic honeycomb string (trace.trace_id)
         "trace.trace_id".to_string(),
         // using explicit trace id passed in from ctx (req'd for lazy eval)
-        json!(event.trace_id.to_string()),
+        event
+            .trace_id
+            .map(|tid| json!(tid.to_string()))
+            .unwrap_or(json!(null)),
     );
 
     values.insert(

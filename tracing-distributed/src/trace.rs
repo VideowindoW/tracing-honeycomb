@@ -107,6 +107,8 @@ impl std::error::Error for TraceCtxError {}
 pub struct Span<Visitor, SpanId, TraceId> {
     /// id identifying this span
     pub id: SpanId,
+    /// Name of the span
+    pub name: String,
     /// `TraceId` identifying the trace to which this span belongs
     pub trace_id: TraceId,
     /// optional parent span id
@@ -126,8 +128,8 @@ pub struct Span<Visitor, SpanId, TraceId> {
 /// An `Event` holds ready-to-publish information derived from a `tracing::Event`.
 #[derive(Clone, Debug)]
 pub struct Event<Visitor, SpanId, TraceId> {
-    /// `TraceId` identifying the trace to which this event belongs
-    pub trace_id: TraceId,
+    /// `TraceId` identifying the trace to which this event belongs, it it is part of a trace.
+    pub trace_id: Option<TraceId>,
     /// optional parent span id
     pub parent_id: Option<SpanId>,
     /// UTC time at which this event was initialized
