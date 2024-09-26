@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 tracing = "0.1"
 tracing-distributed  = { path = "../tracing-distributed" }
-prost = "0.12"
+prost = "0.13"
 ureq = "2.10"
 url = "2.5"
 uuid = { version = "1.10", features = ["v4"] }

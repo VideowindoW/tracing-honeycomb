@@ -5,11 +5,11 @@
 use std::{
     str::FromStr,
     sync::mpsc::{channel, Sender},
-    thread::{self},
+    thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use prost::{common::v1::any_value::Value, trace::v1::span};
+use crate::prost::{common::v1::any_value::Value, trace::v1::span};
 use tracing_distributed::{Telemetry, TraceCtxError};
 use url::Url;
 use worker::Worker;
