@@ -1,4 +1,4 @@
-use crate::telemetry_layer::TraceCtxRegistry;
+use crate::telemetry_layer::{PromotedSpanId, TraceCtx};
 use std::time::SystemTime;
 use tracing_subscriber::registry::LookupSpan;
 
@@ -12,19 +12,21 @@ where
     TraceId: 'static + Clone + Send + Sync,
 {
     let span = tracing::Span::current();
+
     span.with_subscriber(|(current_span_id, dispatch)| {
-        if let Some(trace_ctx_registry) =
-            dispatch.downcast_ref::<TraceCtxRegistry<SpanId, TraceId>>()
-        {
-            trace_ctx_registry.record_trace_ctx(
+        let registry = dispatch
+            .downcast_ref::<tracing_subscriber::Registry>()
+            .ok_or(TraceCtxError::RegistrySubscriberNotRegistered)?;
+
+        registry
+            .span(current_span_id)
+            .expect("Span should be present in registry")
+            .extensions_mut()
+            .replace(TraceCtx {
+                parent_span: remote_parent_span,
                 trace_id,
-                remote_parent_span,
-                current_span_id.clone(),
-            );
-            Ok(())
-        } else {
-            Err(TraceCtxError::TelemetryLayerNotRegistered)
-        }
+            });
+        Ok(())
     })
     .ok_or(TraceCtxError::NoEnabledSpan)?
 }
@@ -39,35 +41,29 @@ where
 {
     let span = tracing::Span::current();
     span.with_subscriber(|(current_span_id, dispatch)| {
-        let trace_ctx_registry = dispatch
-            .downcast_ref::<TraceCtxRegistry<SpanId, TraceId>>()
-            .ok_or(TraceCtxError::TelemetryLayerNotRegistered)?;
-
         let registry = dispatch
             .downcast_ref::<tracing_subscriber::Registry>()
             .ok_or(TraceCtxError::RegistrySubscriberNotRegistered)?;
 
-        let iter = itertools::unfold(Some(current_span_id.clone()), |st| match st {
-            Some(target_id) => {
-                // failure here indicates a broken parent id span link, panic is valid
-                let res = registry
-                    .span(target_id)
-                    .expect("span data not found during eval_ctx for current_trace_ctx");
-                *st = res.parent().map(|x| x.id());
-                Some(res)
-            }
-            None => None,
-        });
-
-        trace_ctx_registry
-            .eval_ctx(iter)
-            .map(|x| {
-                (
-                    x.trace_id,
-                    trace_ctx_registry.promote_span_id(current_span_id.clone()),
-                )
+        let trace_id = registry
+            .span(current_span_id)
+            .and_then(|s| {
+                s.extensions()
+                    .get::<TraceCtx<SpanId, TraceId>>()
+                    .map(|x| x.trace_id.clone())
             })
-            .ok_or(TraceCtxError::NoParentNodeHasTraceCtx)
+            .ok_or(TraceCtxError::NoParentNodeHasTraceCtx)?;
+
+        let span_id = registry
+            .span(current_span_id)
+            .and_then(|s| {
+                s.extensions()
+                    .get::<PromotedSpanId<SpanId>>()
+                    .map(|x| x.0.clone())
+            })
+            .ok_or(TraceCtxError::NoParentNodeHasTraceCtx)?;
+
+        Ok((trace_id, span_id))
     })
     .ok_or(TraceCtxError::NoEnabledSpan)?
 }
