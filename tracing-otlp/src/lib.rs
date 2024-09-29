@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::prost::{common::v1::any_value::Value, trace::v1::span};
-use tracing_distributed::{Telemetry, TraceCtxError};
+pub use tracing_distributed::{Telemetry, TelemetryLayer, TraceCtxError};
 use url::Url;
 use worker::Worker;
 
