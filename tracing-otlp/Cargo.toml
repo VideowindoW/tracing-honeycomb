@@ -12,6 +12,7 @@ prost = "0.13"
 ureq = "2.10"
 url = "2.5"
 uuid = { version = "1.10", features = ["v4"] }
+rand = "0.8"
 
 [dev-dependencies]
 tracing-subscriber = "0.3"

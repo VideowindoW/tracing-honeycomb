@@ -1,5 +1,6 @@
-use std::time::Duration;
+use std::{sync::Mutex, time::Duration};
 
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use tracing_distributed::TelemetryLayer;
 
 use crate::{prost::common::v1::any_value::Value, Otlp, SpanId, TraceId};
@@ -72,6 +73,7 @@ impl Builder {
         self,
         endpoint: &str,
     ) -> Result<TelemetryLayer<Otlp, SpanId, TraceId>, url::ParseError> {
+        let rng = Mutex::new(StdRng::from_entropy());
         Ok(TelemetryLayer::new(
             "",
             Otlp::new(
@@ -80,7 +82,7 @@ impl Builder {
                 self.resource_attributes,
                 self.headers,
             )?,
-            move |tracing_id| SpanId(tracing_id.into_u64()),
+            move |_| SpanId(rng.lock().unwrap().gen()),
         ))
     }
 }

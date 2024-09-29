@@ -57,10 +57,16 @@ where
     fn on_new_span(&self, attrs: &Attributes, id: &Id, ctx: Context<S>) {
         let span = ctx.span(id).expect("span data not found during new_span");
 
-        let tid = span.parent().and_then(|p| {
-            p.extensions()
+        let pinfo = span.parent().and_then(|p| {
+            let extensions = p.extensions();
+            let span_id = extensions
+                .get::<PromotedSpanId<SpanId>>()
+                .expect("All spans should have a promoted span id")
+                .clone()
+                .0;
+            extensions
                 .get::<TraceCtx<SpanId, TraceId>>()
-                .map(|t| t.trace_id.clone())
+                .map(|t| (t.trace_id.clone(), span_id))
         });
 
         let mut extensions_mut = span.extensions_mut();
@@ -72,15 +78,12 @@ where
         extensions_mut.insert::<Vec<trace::Event<V, SpanId, TraceId>>>(Default::default());
 
         // If parent is part of a trace, then make this span part of the trace too.
-        if let Some(tid) = tid {
-            extensions_mut.insert(TraceCtx {
+        if let Some((tid, pid)) = pinfo {
+            let trace_ctx = TraceCtx {
                 trace_id: tid,
-                parent_span: Some((self.promote_span_id)(
-                    span.parent()
-                        .expect("Span parent should not disappear")
-                        .id(),
-                )),
-            })
+                parent_span: Some(pid),
+            };
+            extensions_mut.insert(trace_ctx)
         }
     }
 
@@ -132,9 +135,17 @@ where
                     let span = ctx
                         .span(&parent_id)
                         .expect("Parent span id should be in the context");
+
+                    let parent_id = Some(
+                        span.extensions()
+                            .get::<PromotedSpanId<SpanId>>()
+                            .expect("All spans should have a promoted span id")
+                            .clone()
+                            .0,
+                    );
                     let event = trace::Event {
                         trace_id: Some(parent_trace_ctx.trace_id),
-                        parent_id: Some((self.promote_span_id)(parent_id)),
+                        parent_id,
                         initialized_at,
                         meta: event.metadata(),
                         service_name: self.service_name,
@@ -173,17 +184,26 @@ where
                 .remove::<Vec<trace::Event<V, SpanId, TraceId>>>()
                 .expect("List of events should have been added to span");
 
+            let id = extensions_mut
+                .remove::<PromotedSpanId<SpanId>>()
+                .expect("All spans should have a promoted span id")
+                .0
+                .clone();
+
+            let parent_id = parent_span.or_else(|| {
+                span.parent().map(|p| {
+                    p.extensions()
+                        .get::<PromotedSpanId<SpanId>>()
+                        .expect("All spans should have promoted span ids")
+                        .0
+                        .clone()
+                })
+            });
+
             let completed_at = SystemTime::now();
 
-            let parent_id = match parent_span {
-                None => span
-                    .parent()
-                    .map(|parent_ref| (self.promote_span_id)(parent_ref.id())),
-                Some(parent_span) => Some(parent_span),
-            };
-
             let span = trace::Span {
-                id: (self.promote_span_id)(span.id()),
+                id,
                 name: span.name().to_string(),
                 meta: span.metadata(),
                 parent_id,
