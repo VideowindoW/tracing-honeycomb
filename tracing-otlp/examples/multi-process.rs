@@ -12,35 +12,37 @@ use tracing_subscriber::layer::SubscriberExt;
 pub fn main() {
     procspawn::init();
 
-    init_tracing();
-
-    span!(Level::INFO, "Main process").in_scope(|| {
+    init_tracing("main".to_string());
+    span!(Level::INFO, "Main function").in_scope(|| {
         register_dist_tracing_root(TraceId::new(), None).unwrap();
-        for i in 0..5 {
-            let ctx = current_dist_trace_ctx().unwrap();
-            procspawn::spawn((ctx.0 .0, ctx.1 .0, i), |(trace_id, span_id, i)| {
-                init_tracing();
+        span!(Level::INFO, "Main process").in_scope(|| {
+            register_dist_tracing_root(TraceId::new(), None).unwrap();
+            for i in 0..5 {
+                let ctx = current_dist_trace_ctx().unwrap();
+                procspawn::spawn((ctx.0 .0, ctx.1 .0, i), |(trace_id, span_id, i)| {
+                    init_tracing("child".to_string());
 
-                span!(Level::INFO, "Subprocess", i = i).in_scope(|| {
-                    register_dist_tracing_root(trace_id.into(), Some(span_id.into())).unwrap();
-                    span!(Level::INFO, "Subprocess child", i = i).in_scope(|| {
-                        event!(Level::INFO, i, "event");
-                        thread::sleep(Duration::from_millis(50))
+                    span!(Level::INFO, "Subprocess", i = i).in_scope(|| {
+                        register_dist_tracing_root(trace_id.into(), Some(span_id.into())).unwrap();
+                        span!(Level::INFO, "Subprocess child", i = i).in_scope(|| {
+                            event!(Level::INFO, i, "event");
+                            thread::sleep(Duration::from_millis(50))
+                        });
                     });
+                    thread::sleep(Duration::from_secs(3))
                 });
-                thread::sleep(Duration::from_secs(3))
-            });
-        }
-        thread::sleep(Duration::from_millis(100))
+            }
+            thread::sleep(Duration::from_millis(100))
+        });
     });
     thread::sleep(Duration::from_secs(3))
 }
 
-pub fn init_tracing() {
+pub fn init_tracing(service: String) {
     tracing::subscriber::set_global_default(
         tracing_subscriber::registry().with(
             Builder::new()
-                .service_name("test".to_string())
+                .service_name(service)
                 .build("http://127.0.0.1:4318")
                 .unwrap(),
         ),

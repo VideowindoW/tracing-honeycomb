@@ -10,6 +10,7 @@ use std::{
 };
 
 use crate::prost::{common::v1::any_value::Value, trace::v1::span};
+use prost::trace::v1::span::Link;
 pub use tracing_distributed::{Telemetry, TelemetryLayer, TraceCtxError};
 use url::Url;
 use worker::Worker;
@@ -108,7 +109,6 @@ impl Telemetry for Otlp {
                 dropped_attributes_count: 0,
             })
             .collect();
-
         let span = Span {
             trace_id: span.trace_id.0.to_be_bytes().to_vec(),
             span_id: span.id.0.to_be_bytes().to_vec(),
@@ -126,7 +126,17 @@ impl Telemetry for Otlp {
             dropped_attributes_count: 0,
             events,
             dropped_events_count: 0,
-            links: vec![],
+            links: std::iter::once(span.follows_from)
+                .flatten()
+                .map(|l| Link {
+                    trace_id: l.0 .0.to_be_bytes().to_vec(),
+                    span_id: l.1 .0.to_be_bytes().to_vec(),
+                    trace_state: "".to_string(),
+                    attributes: vec![],
+                    dropped_attributes_count: 0,
+                    flags: 0,
+                })
+                .collect(),
             dropped_links_count: 0,
             status: None,
         };

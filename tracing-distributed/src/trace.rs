@@ -1,4 +1,4 @@
-use crate::telemetry_layer::{PromotedSpanId, TraceCtx};
+use crate::telemetry_layer::{FollowsFrom, PromotedSpanId, TraceCtx};
 use std::time::SystemTime;
 use tracing_subscriber::registry::LookupSpan;
 
@@ -18,14 +18,22 @@ where
             .downcast_ref::<tracing_subscriber::Registry>()
             .ok_or(TraceCtxError::RegistrySubscriberNotRegistered)?;
 
-        registry
+        let span = registry
             .span(current_span_id)
-            .expect("Span should be present in registry")
-            .extensions_mut()
-            .replace(TraceCtx {
-                parent_span: remote_parent_span,
-                trace_id,
-            });
+            .expect("Span should be present in registry");
+
+        let mut extensions_mut = span.extensions_mut();
+
+        if let Some(TraceCtx {
+            parent_span: Some(parent_span),
+            trace_id,
+        }) = extensions_mut.replace(TraceCtx {
+            parent_span: remote_parent_span,
+            trace_id,
+        }) {
+            extensions_mut.replace(FollowsFrom(trace_id, parent_span));
+        }
+
         Ok(())
     })
     .ok_or(TraceCtxError::NoEnabledSpan)?
@@ -109,6 +117,8 @@ pub struct Span<Visitor, SpanId, TraceId> {
     pub trace_id: TraceId,
     /// optional parent span id
     pub parent_id: Option<SpanId>,
+    /// Specifies original parent if the span originally had a parent span in another trace
+    pub follows_from: Option<(TraceId, SpanId)>,
     /// UTC time at which this span was initialized
     pub initialized_at: SystemTime,
     /// `chrono::Duration` elapsed between the time this span was initialized and the time it was completed

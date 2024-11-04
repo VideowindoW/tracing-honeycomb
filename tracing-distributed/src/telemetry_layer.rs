@@ -21,6 +21,11 @@ pub(crate) struct TraceCtx<SpanId, TraceId> {
     pub(crate) trace_id: TraceId,
 }
 
+/// Used when the trace context is overwritten and indicates this span originally
+/// had another parent
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub(crate) struct FollowsFrom<SpanId, TraceId>(pub TraceId, pub SpanId);
+
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub(crate) struct PromotedSpanId<SpanId>(pub(crate) SpanId);
 
@@ -190,15 +195,11 @@ where
                 .0
                 .clone();
 
-            let parent_id = parent_span.or_else(|| {
-                span.parent().map(|p| {
-                    p.extensions()
-                        .get::<PromotedSpanId<SpanId>>()
-                        .expect("All spans should have promoted span ids")
-                        .0
-                        .clone()
-                })
-            });
+            let follows_from = extensions_mut
+                .remove::<FollowsFrom<SpanId, TraceId>>()
+                .map(|t| (t.0, t.1));
+
+            let parent_id = parent_span;
 
             let completed_at = SystemTime::now();
 
@@ -207,6 +208,7 @@ where
                 name: span.name().to_string(),
                 meta: span.metadata(),
                 parent_id,
+                follows_from,
                 initialized_at,
                 trace_id,
                 completed_at,
