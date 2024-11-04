@@ -110,8 +110,8 @@ impl Telemetry for Otlp {
             .collect();
 
         let span = Span {
-            trace_id: span.trace_id.0.to_le_bytes().to_vec(),
-            span_id: span.id.0.to_le_bytes().to_vec(),
+            trace_id: span.trace_id.0.to_be_bytes().to_vec(),
+            span_id: span.id.0.to_be_bytes().to_vec(),
             trace_state: "".to_string(),
             parent_span_id: span
                 .parent_id
