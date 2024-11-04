@@ -116,10 +116,17 @@ impl Worker {
                         }
                     }
                     Err(err) => {
+                        const MAX_OUTSTANDING: usize = 1024;
+
                         // Sending failed, so put spans back into vec
                         spans = std::mem::take(
                             &mut protobuf_req.resource_spans[0].scope_spans[0].spans,
-                        );
+                        )
+                        .into_iter()
+                        .rev()
+                        .take(MAX_OUTSTANDING)
+                        .rev()
+                        .collect();
                         eprintln!("Error sending spans to {}: {:?}", &self.endpoint_trace, err)
                     }
                 }
